@@ -1,6 +1,6 @@
 {
-  "cmd": "statscheck",
+  "cmd": "status",
   "target": "manchanhkundz",
-  "timestamp": 1775810505,
+  "timestamp": 1775810524,
   "extra": {}
 }
