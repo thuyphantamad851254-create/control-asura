@@ -1,1 +1,6 @@
-{"cmd":"","target":"","timestamp":0,"extra":{}}
+{
+  "cmd": "stop",
+  "target": "manchanhkundz",
+  "timestamp": 1775809850,
+  "extra": {}
+}
