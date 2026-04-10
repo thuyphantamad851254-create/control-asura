@@ -1,6 +1,6 @@
 {
-  "cmd": "stop",
+  "cmd": "status",
   "target": "manchanhkundz",
-  "timestamp": 1775810788,
+  "timestamp": 1775810801,
   "extra": {}
 }
