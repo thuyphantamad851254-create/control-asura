@@ -1,8 +1,6 @@
 {
-  "cmd": "start",
+  "cmd": "stop",
   "target": "manchanhkundz",
-  "timestamp": 1775810574,
-  "extra": {
-    "mode": "Treadmill"
-  }
+  "timestamp": 1775810638,
+  "extra": {}
 }
