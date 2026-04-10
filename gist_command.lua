@@ -1,15 +1,21 @@
 -- ============================================================
 -- REMOTE COMMAND HANDLER
--- Dung GitHub Contents API (khong cache, realtime)
--- Poll moi 2 giay
+-- Dung jsDelivr CDN (khong rate limit, cache ~1 phut)
+-- Poll moi 3 giay
 -- ============================================================
 
 local GITHUB_USER = "thuyphantamad851254-create"
 local GITHUB_REPO = "control-asura"
 
--- GitHub Contents API tra ve realtime, khong bi cache nhu raw URL
-local CMD_API_URL = string.format(
-    "https://api.github.com/repos/%s/%s/contents/commands.json",
+-- jsDelivr cache nhanh hon raw github, khong bi rate limit
+local CMD_URL = string.format(
+    "https://cdn.jsdelivr.net/gh/%s/%s@main/commands.json",
+    GITHUB_USER, GITHUB_REPO
+)
+
+-- Purge cache jsDelivr sau khi Python ghi lenh moi
+local PURGE_URL = string.format(
+    "https://purge.jsdelivr.net/gh/%s/%s@main/commands.json",
     GITHUB_USER, GITHUB_REPO
 )
 
@@ -21,7 +27,7 @@ local Players = game:GetService("Players")
 local player  = Players.LocalPlayer
 
 local lastCmdTimestamp = 0
-local POLL_INTERVAL    = 2  -- giam xuong 2 giay
+local POLL_INTERVAL    = 3
 
 -- ============================================================
 -- Base64 decode (de doc noi dung tu GitHub API)
@@ -182,7 +188,7 @@ local function handleCommand(cmd, target, extra)
 end
 
 -- ============================================================
--- POLL LOOP - dung GitHub Contents API, khong cache
+-- POLL LOOP - dung jsDelivr CDN, khong rate limit
 -- ============================================================
 task.spawn(function()
     task.wait(3)
@@ -197,31 +203,19 @@ task.spawn(function()
     while true do
         task.wait(POLL_INTERVAL)
         pcall(function()
-            -- GitHub Contents API: tra ve JSON co truong "content" la base64
-            -- Them header de tranh rate limit
+            -- jsDelivr tra ve raw JSON, khong can decode base64
             local res = fn({
-                Url    = CMD_API_URL,
+                Url    = CMD_URL .. "?t=" .. tostring(math.floor(tick())),
                 Method = "GET",
-                Headers = {
-                    ["Accept"]     = "application/vnd.github.v3+json",
-                    ["User-Agent"] = "RobloxScript",
-                    -- Them If-None-Match de giam bandwidth neu khong co thay doi
-                }
+                Headers = { ["User-Agent"] = "RobloxScript" }
             })
 
             if not res or not res.Body then return end
 
-            local ok, meta = pcall(function()
+            local ok, data = pcall(function()
                 return HttpS:JSONDecode(res.Body)
             end)
-            if not ok or type(meta) ~= "table" or not meta.content then return end
-
-            -- Decode base64 content
-            local raw = base64Decode(meta.content:gsub("\n",""))
-            local ok2, data = pcall(function()
-                return HttpS:JSONDecode(raw)
-            end)
-            if not ok2 or type(data) ~= "table" then return end
+            if not ok or type(data) ~= "table" then return end
 
             local cmd       = data.cmd or ""
             local target    = data.target or ""
