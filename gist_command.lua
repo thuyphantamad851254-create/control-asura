@@ -1,16 +1,19 @@
 -- ============================================================
--- REMOTE COMMAND HANDLER - GitHub Repo (NO TOKEN NEEDED)
--- Đọc lệnh từ commands.json (public repo)
--- Kết quả gửi về Discord webhook
+-- REMOTE COMMAND HANDLER
+-- Dung GitHub Contents API (khong cache, realtime)
+-- Poll moi 2 giay
 -- ============================================================
 
-local GITHUB_USER = "thuyphantamad851254-create"   -- vd: thuyphantamad851254-create
-local GITHUB_REPO = "control-asura"  -- vd: control-asura
+local GITHUB_USER = "thuyphantamad851254-create"
+local GITHUB_REPO = "control-asura"
 
-local CMD_RAW_URL = string.format(
-    "https://raw.githubusercontent.com/%s/%s/main/commands.json",
+-- GitHub Contents API tra ve realtime, khong bi cache nhu raw URL
+local CMD_API_URL = string.format(
+    "https://api.github.com/repos/%s/%s/contents/commands.json",
     GITHUB_USER, GITHUB_REPO
 )
+
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1486045489244930199/HCnT6m-t3jtr5cBc6AoI-mVi5chpxPslNPhEOHXHXfY3JmNj7p-d2qwSABDhtmpSwkV2"
 
 local HttpS   = game:GetService("HttpService")
 local TS      = game:GetService("TeleportService")
@@ -18,31 +21,65 @@ local Players = game:GetService("Players")
 local player  = Players.LocalPlayer
 
 local lastCmdTimestamp = 0
-local POLL_INTERVAL    = 5
+local POLL_INTERVAL    = 2  -- giam xuong 2 giay
 
 -- ============================================================
--- Xử lý lệnh
+-- Base64 decode (de doc noi dung tu GitHub API)
+-- ============================================================
+local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+local function base64Decode(data)
+    data = data:gsub("[^"..b64.."=]", "")
+    return (data:gsub(".", function(x)
+        if x == "=" then return "" end
+        local r, f = "", (b64:find(x) - 1)
+        for i = 6, 1, -1 do
+            r = r .. (f % 2^i - f % 2^(i-1) > 0 and "1" or "0")
+        end
+        return r
+    end):gsub("%d%d%d%d%d%d%d%d", function(x)
+        local c = 0
+        for i = 1, 8 do c = c + (x:sub(i,i) == "1" and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
+
+-- ============================================================
+-- Webhook helper
+-- ============================================================
+local function webhook(msg)
+    task.spawn(function()
+        pcall(function()
+            local fn = request or http_request
+            if not fn then return end
+            fn({
+                Url    = WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body   = HttpS:JSONEncode({
+                    username = "RemoteControl | " .. player.Name,
+                    content  = msg
+                })
+            })
+        end)
+    end)
+end
+
+-- ============================================================
+-- Xu ly lenh
 -- ============================================================
 local function handleCommand(cmd, target, extra)
     if target ~= "" and target ~= player.Name then return end
 
-    print("[CMD] Nhan lenh:", cmd, "| target:", target)
+    print("[REMOTE] cmd:", cmd, "target:", target)
 
     if cmd == "stop" then
-        if STATE then
-            STATE.running = false
-            STATE.busy    = false
-        end
-        -- Gọi đúng hàm stop như nút GUI
         pcall(function()
             if getgenv().REMOTE_stopTraining then
                 getgenv().REMOTE_stopTraining()
-            elseif stopTrainingByUser then
-                stopTrainingByUser()
             end
         end)
-        log("STOP boi Remote Control")
-        sendWebhook("STOP - " .. player.Name, true)
+        webhook("STOP - " .. player.Name)
 
     elseif cmd == "start" then
         local mode = (extra and extra.mode) or "Treadmill"
@@ -51,136 +88,140 @@ local function handleCommand(cmd, target, extra)
                 getgenv().REMOTE_startFarm(mode)
             end
         end)
-        log("Start [" .. mode .. "] boi Remote Control")
-        sendWebhook("START [" .. mode .. "] - " .. player.Name, true)
+        webhook("START [" .. mode .. "] - " .. player.Name)
 
     elseif cmd == "checkpeople" then
-        if checkPeopleAtSelectedLocation then checkPeopleAtSelectedLocation() end
+        pcall(function()
+            if checkPeopleAtSelectedLocation then
+                checkPeopleAtSelectedLocation()
+            end
+        end)
 
     elseif cmd == "equiparmor" then
-        if equipArmorNow then equipArmorNow() end
-        sendWebhook("EQUIP ARMOR - " .. player.Name, true)
+        pcall(function()
+            if equipArmorNow then equipArmorNow() end
+        end)
+        webhook("EQUIP ARMOR - " .. player.Name)
 
     elseif cmd == "hopserver" then
-        sendWebhook("HOP SERVER - " .. player.Name, true)
+        webhook("HOP SERVER - " .. player.Name)
         task.wait(1)
         pcall(function() TS:Teleport(game.PlaceId) end)
 
     elseif cmd == "statscheck" then
         task.spawn(function()
-            if equipAndUseStatCheckTool then
-                local ok = equipAndUseStatCheckTool()
-                if ok then
-                    task.wait(2)
-                    local stats = collectStatCheckValues and collectStatCheckValues()
-                    if stats then
-                        local msg = (formatStatCheckWebhook and formatStatCheckWebhook(stats))
-                            or ("Stats checked - " .. player.Name)
-                        sendWebhook(msg, true)
-                        if closeStatCheckUi then closeStatCheckUi(stats.root) end
+            pcall(function()
+                if equipAndUseStatCheckTool then
+                    local ok = equipAndUseStatCheckTool()
+                    if ok then
+                        task.wait(2)
+                        local stats = collectStatCheckValues and collectStatCheckValues()
+                        if stats then
+                            local msg = (formatStatCheckWebhook and formatStatCheckWebhook(stats))
+                                or ("Stats checked - " .. player.Name)
+                            webhook(msg)
+                            if closeStatCheckUi then closeStatCheckUi(stats.root) end
+                        end
                     end
                 end
-            end
+            end)
+        end)
+
+    elseif cmd == "saveon" then
+        pcall(function()
+            if STATE then STATE.saveConfig = true end
+            if queueConfigForTeleport then queueConfigForTeleport() end
+        end)
+        webhook("SAVE ON - " .. player.Name)
+
+    elseif cmd == "unsave" then
+        pcall(function()
+            if STATE then STATE.saveConfig = false end
+        end)
+        webhook("SAVE OFF - " .. player.Name)
+
+    elseif cmd == "status" then
+        pcall(function()
+            local msg = string.format(
+                "STATUS | %s | HP:%.0f Hunger:%.0f%% Protein:%.0f%% Cash:Y%d | Mode:%s Running:%s",
+                player.Name,
+                getHP and getHP() or 0,
+                getHunger and getHunger() or 0,
+                getProtein and getProtein() or 0,
+                getCash and getCash() or 0,
+                CFG and CFG.Mode or "?",
+                tostring(STATE and STATE.running or false)
+            )
+            webhook(msg)
         end)
 
     elseif cmd == "screenshot" then
         task.spawn(function()
             pcall(function()
-                -- Thử các API chụp màn hình của executor
-                local imgData = nil
-
-                -- Synapse / KRNL / Fluxus
                 if screenshot then
-                    imgData = screenshot()
-                elseif saveinstance then
-                    -- fallback: không hỗ trợ
-                end
-
-                if imgData then
-                    -- Gửi raw image lên Discord webhook
-                    local fn = request or http_request
-                    if fn then
-                        fn({
-                            Url = WEBHOOK_URL,
-                            Method = "POST",
-                            Headers = { ["Content-Type"] = "multipart/form-data" },
-                            Body = imgData,
-                            -- Một số executor hỗ trợ MultipartFormdata
-                            MultipartData = {
-                                {
-                                    Name = "file",
-                                    Value = imgData,
-                                    FileName = "screenshot_" .. player.Name .. ".png",
-                                    ContentType = "image/png"
-                                },
-                                {
-                                    Name = "content",
-                                    Value = "Screenshot - " .. player.Name .. " - " .. os.date("%H:%M:%S")
+                    local data = screenshot()
+                    if data then
+                        local fn = request or http_request
+                        if fn then
+                            fn({
+                                Url    = WEBHOOK_URL,
+                                Method = "POST",
+                                MultipartData = {
+                                    { Name = "content", Value = "Screenshot - " .. player.Name },
+                                    { Name = "file", Value = data, FileName = "screen.png", ContentType = "image/png" }
                                 }
-                            }
-                        })
+                            })
+                        end
                     end
                 else
-                    -- Executor không hỗ trợ screenshot API
-                    -- Fallback: chụp bằng writefile nếu có
-                    if writefile and isfile then
-                        local path = "screenshot_temp.png"
-                        -- Một số executor: rconsoleprint thay thế
-                        sendWebhook("Screenshot: executor nay khong ho tro chup man hinh tu dong - " .. player.Name, true)
-                    else
-                        sendWebhook("Screenshot: khong ho tro - " .. player.Name, true)
-                    end
+                    webhook("Screenshot: executor nay khong ho tro - " .. player.Name)
                 end
             end)
         end)
-        if STATE then STATE.saveConfig = true end
-        if queueConfigForTeleport then queueConfigForTeleport() end
-        sendWebhook("SAVE ON - " .. player.Name, true)
-
-    elseif cmd == "unsave" then
-        if STATE then STATE.saveConfig = false end
-        sendWebhook("SAVE OFF - " .. player.Name, true)
-
-    elseif cmd == "status" then
-        local msg = string.format(
-            "STATUS | %s | HP:%.0f Hunger:%.0f%% Protein:%.0f%% Cash:Y%d | Mode:%s Running:%s",
-            player.Name,
-            getHP and getHP() or 0,
-            getHunger and getHunger() or 0,
-            getProtein and getProtein() or 0,
-            getCash and getCash() or 0,
-            CFG and CFG.Mode or "?",
-            tostring(STATE and STATE.running or false)
-        )
-        sendWebhook(msg, true)
     end
 end
 
 -- ============================================================
--- POLL LOOP - đọc commands.json mỗi 5s
+-- POLL LOOP - dung GitHub Contents API, khong cache
 -- ============================================================
 task.spawn(function()
     task.wait(3)
-    -- Báo online khi load xong
-    if sendWebhook then
-        sendWebhook("ONLINE - " .. player.Name .. " da load remote control", true)
+    webhook("ONLINE - " .. player.Name .. " da load remote control")
+
+    local fn = request or http_request
+    if not fn then
+        warn("[REMOTE] Executor khong ho tro request/http_request")
+        return
     end
 
     while true do
         task.wait(POLL_INTERVAL)
         pcall(function()
-            local fn = request or http_request
-            if not fn then return end
+            -- GitHub Contents API: tra ve JSON co truong "content" la base64
+            -- Them header de tranh rate limit
+            local res = fn({
+                Url    = CMD_API_URL,
+                Method = "GET",
+                Headers = {
+                    ["Accept"]     = "application/vnd.github.v3+json",
+                    ["User-Agent"] = "RobloxScript",
+                    -- Them If-None-Match de giam bandwidth neu khong co thay doi
+                }
+            })
 
-            -- cache-buster
-            local url = CMD_RAW_URL .. "?t=" .. tostring(math.floor(tick()))
-            local res = fn({ Url = url, Method = "GET" })
             if not res or not res.Body then return end
 
-            local ok, data = pcall(function()
+            local ok, meta = pcall(function()
                 return HttpS:JSONDecode(res.Body)
             end)
-            if not ok or type(data) ~= "table" then return end
+            if not ok or type(meta) ~= "table" or not meta.content then return end
+
+            -- Decode base64 content
+            local raw = base64Decode(meta.content:gsub("\n",""))
+            local ok2, data = pcall(function()
+                return HttpS:JSONDecode(raw)
+            end)
+            if not ok2 or type(data) ~= "table" then return end
 
             local cmd       = data.cmd or ""
             local target    = data.target or ""
