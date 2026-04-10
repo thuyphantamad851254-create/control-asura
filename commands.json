@@ -1,6 +1,8 @@
 {
-  "cmd": "screenshot",
+  "cmd": "start",
   "target": "manchanhkundz",
-  "timestamp": 1775810554,
-  "extra": {}
+  "timestamp": 1775810574,
+  "extra": {
+    "mode": "Treadmill"
+  }
 }
