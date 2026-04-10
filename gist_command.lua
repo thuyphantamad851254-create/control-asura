@@ -1,25 +1,15 @@
 -- ============================================================
 -- REMOTE COMMAND HANDLER
--- Dung jsDelivr CDN (khong rate limit, cache ~1 phut)
--- Poll moi 3 giay
+-- Token duoc truyen tu fullscript.lua qua getgenv()
+-- Khong co token nao trong file nay
 -- ============================================================
 
-local GITHUB_USER = "thuyphantamad851254-create"
-local GITHUB_REPO = "control-asura"
+-- Doc config tu getgenv() - duoc set trong fullscript.lua
+local GIST_ID    = getgenv().REMOTE_GIST_ID    or "YOUR_GIST_ID"
+local GIST_TOKEN = getgenv().REMOTE_GIST_TOKEN or ""
+local GIST_FILE  = "commands.json"
 
--- jsDelivr cache nhanh hon raw github, khong bi rate limit
-local CMD_URL = string.format(
-    "https://cdn.jsdelivr.net/gh/%s/%s@main/commands.json",
-    GITHUB_USER, GITHUB_REPO
-)
-
--- Purge cache jsDelivr sau khi Python ghi lenh moi
-local PURGE_URL = string.format(
-    "https://purge.jsdelivr.net/gh/%s/%s@main/commands.json",
-    GITHUB_USER, GITHUB_REPO
-)
-
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1486045489244930199/HCnT6m-t3jtr5cBc6AoI-mVi5chpxPslNPhEOHXHXfY3JmNj7p-d2qwSABDhtmpSwkV2"
+local WEBHOOK_URL = getgenv().REMOTE_WEBHOOK or "https://discord.com/api/webhooks/1486045489244930199/HCnT6m-t3jtr5cBc6AoI-mVi5chpxPslNPhEOHXHXfY3JmNj7p-d2qwSABDhtmpSwkV2"
 
 local HttpS   = game:GetService("HttpService")
 local TS      = game:GetService("TeleportService")
@@ -29,40 +19,16 @@ local player  = Players.LocalPlayer
 local lastCmdTimestamp = 0
 local POLL_INTERVAL    = 3
 
--- ============================================================
--- Base64 decode (de doc noi dung tu GitHub API)
--- ============================================================
-local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-local function base64Decode(data)
-    data = data:gsub("[^"..b64.."=]", "")
-    return (data:gsub(".", function(x)
-        if x == "=" then return "" end
-        local r, f = "", (b64:find(x) - 1)
-        for i = 6, 1, -1 do
-            r = r .. (f % 2^i - f % 2^(i-1) > 0 and "1" or "0")
-        end
-        return r
-    end):gsub("%d%d%d%d%d%d%d%d", function(x)
-        local c = 0
-        for i = 1, 8 do c = c + (x:sub(i,i) == "1" and 2^(8-i) or 0) end
-        return string.char(c)
-    end))
-end
-
--- ============================================================
--- Webhook helper
--- ============================================================
 local function webhook(msg)
     task.spawn(function()
         pcall(function()
             local fn = request or http_request
             if not fn then return end
             fn({
-                Url    = WEBHOOK_URL,
-                Method = "POST",
+                Url     = WEBHOOK_URL,
+                Method  = "POST",
                 Headers = {["Content-Type"] = "application/json"},
-                Body   = HttpS:JSONEncode({
+                Body    = HttpS:JSONEncode({
                     username = "RemoteControl | " .. player.Name,
                     content  = msg
                 })
@@ -71,36 +37,26 @@ local function webhook(msg)
     end)
 end
 
--- ============================================================
--- Xu ly lenh
--- ============================================================
 local function handleCommand(cmd, target, extra)
     if target ~= "" and target ~= player.Name then return end
-
     print("[REMOTE] cmd:", cmd, "target:", target)
 
     if cmd == "stop" then
         pcall(function()
-            if getgenv().REMOTE_stopTraining then
-                getgenv().REMOTE_stopTraining()
-            end
+            if getgenv().REMOTE_stopTraining then getgenv().REMOTE_stopTraining() end
         end)
         webhook("STOP - " .. player.Name)
 
     elseif cmd == "start" then
         local mode = (extra and extra.mode) or "Treadmill"
         pcall(function()
-            if getgenv().REMOTE_startFarm then
-                getgenv().REMOTE_startFarm(mode)
-            end
+            if getgenv().REMOTE_startFarm then getgenv().REMOTE_startFarm(mode) end
         end)
         webhook("START [" .. mode .. "] - " .. player.Name)
 
     elseif cmd == "checkpeople" then
         pcall(function()
-            if checkPeopleAtSelectedLocation then
-                checkPeopleAtSelectedLocation()
-            end
+            if checkPeopleAtSelectedLocation then checkPeopleAtSelectedLocation() end
         end)
 
     elseif cmd == "equiparmor" then
@@ -160,62 +116,55 @@ local function handleCommand(cmd, target, extra)
             )
             webhook(msg)
         end)
-
-    elseif cmd == "screenshot" then
-        task.spawn(function()
-            pcall(function()
-                if screenshot then
-                    local data = screenshot()
-                    if data then
-                        local fn = request or http_request
-                        if fn then
-                            fn({
-                                Url    = WEBHOOK_URL,
-                                Method = "POST",
-                                MultipartData = {
-                                    { Name = "content", Value = "Screenshot - " .. player.Name },
-                                    { Name = "file", Value = data, FileName = "screen.png", ContentType = "image/png" }
-                                }
-                            })
-                        end
-                    end
-                else
-                    webhook("Screenshot: executor nay khong ho tro - " .. player.Name)
-                end
-            end)
-        end)
     end
 end
 
--- ============================================================
--- POLL LOOP - dung jsDelivr CDN, khong rate limit
--- ============================================================
 task.spawn(function()
     task.wait(3)
-    webhook("ONLINE - " .. player.Name .. " da load remote control")
+
+    if GIST_TOKEN == "" then
+        warn("[REMOTE] Chua set REMOTE_GIST_TOKEN trong fullscript.lua")
+        return
+    end
+
+    webhook("ONLINE - " .. player.Name)
 
     local fn = request or http_request
     if not fn then
-        warn("[REMOTE] Executor khong ho tro request/http_request")
+        warn("[REMOTE] Executor khong ho tro request")
         return
     end
+
+    local GIST_API = "https://api.github.com/gists/" .. GIST_ID
 
     while true do
         task.wait(POLL_INTERVAL)
         pcall(function()
-            -- jsDelivr tra ve raw JSON, khong can decode base64
             local res = fn({
-                Url    = CMD_URL .. "?t=" .. tostring(math.floor(tick())),
+                Url    = GIST_API,
                 Method = "GET",
-                Headers = { ["User-Agent"] = "RobloxScript" }
+                Headers = {
+                    ["Authorization"] = "token " .. GIST_TOKEN,
+                    ["Accept"]        = "application/vnd.github.v3+json",
+                }
             })
 
             if not res or not res.Body then return end
 
-            local ok, data = pcall(function()
+            local ok, meta = pcall(function()
                 return HttpS:JSONDecode(res.Body)
             end)
-            if not ok or type(data) ~= "table" then return end
+            if not ok or type(meta) ~= "table" then return end
+
+            local fileContent = meta.files
+                and meta.files[GIST_FILE]
+                and meta.files[GIST_FILE].content
+            if not fileContent then return end
+
+            local ok2, data = pcall(function()
+                return HttpS:JSONDecode(fileContent)
+            end)
+            if not ok2 or type(data) ~= "table" then return end
 
             local cmd       = data.cmd or ""
             local target    = data.target or ""
