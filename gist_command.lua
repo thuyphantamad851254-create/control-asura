@@ -56,37 +56,23 @@ local function handleCommand(cmd, target, extra)
 
     elseif cmd == "checkpeople" then
         pcall(function()
-            if checkPeopleAtSelectedLocation then checkPeopleAtSelectedLocation() end
+            if getgenv().REMOTE_checkPeople then getgenv().REMOTE_checkPeople() end
         end)
 
     elseif cmd == "equiparmor" then
         pcall(function()
-            if equipArmorNow then equipArmorNow() end
+            if getgenv().REMOTE_equipArmor then getgenv().REMOTE_equipArmor() end
         end)
         webhook("EQUIP ARMOR - " .. player.Name)
 
     elseif cmd == "hopserver" then
-        webhook("HOP SERVER - " .. player.Name)
-        task.wait(1)
-        pcall(function() TS:Teleport(game.PlaceId) end)
+        pcall(function()
+            if getgenv().REMOTE_hopServer then getgenv().REMOTE_hopServer() end
+        end)
 
     elseif cmd == "statscheck" then
-        task.spawn(function()
-            pcall(function()
-                if equipAndUseStatCheckTool then
-                    local ok = equipAndUseStatCheckTool()
-                    if ok then
-                        task.wait(2)
-                        local stats = collectStatCheckValues and collectStatCheckValues()
-                        if stats then
-                            local msg = (formatStatCheckWebhook and formatStatCheckWebhook(stats))
-                                or ("Stats checked - " .. player.Name)
-                            webhook(msg)
-                            if closeStatCheckUi then closeStatCheckUi(stats.root) end
-                        end
-                    end
-                end
-            end)
+        pcall(function()
+            if getgenv().REMOTE_statCheck then getgenv().REMOTE_statCheck() end
         end)
 
     elseif cmd == "saveon" then
