@@ -1,6 +1,8 @@
 {
-  "cmd": "screenshot",
+  "cmd": "start",
   "target": "manchanhkundz",
-  "timestamp": 1775810877,
-  "extra": {}
+  "timestamp": 1775810901,
+  "extra": {
+    "mode": "pullup"
+  }
 }
