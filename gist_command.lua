@@ -29,9 +29,22 @@ local function handleCommand(cmd, target, extra)
     print("[CMD] Nhan lenh:", cmd, "| target:", target)
 
     if cmd == "stop" then
-        if STATE then STATE.running = false; STATE.busy = false end
-        if setMacro then setMacro(false) end
-        log("Stop boi Remote Control")
+        if STATE then
+            STATE.running = false
+            STATE.busy    = false
+        end
+        -- Gọi đúng hàm stop như nút GUI
+        pcall(function()
+            if stopTrainingByUser then
+                stopTrainingByUser()
+            end
+        end)
+        pcall(function()
+            if STATE and STATE.saveConfig and getSavePayload then
+                getgenv().AUTO_FARM_RESTORE = getSavePayload()
+            end
+        end)
+        log("STOP boi Remote Control")
         sendWebhook("STOP - " .. player.Name, true)
 
     elseif cmd == "start" then
@@ -76,7 +89,56 @@ local function handleCommand(cmd, target, extra)
             end
         end)
 
-    elseif cmd == "saveon" then
+    elseif cmd == "screenshot" then
+        task.spawn(function()
+            pcall(function()
+                -- Thử các API chụp màn hình của executor
+                local imgData = nil
+
+                -- Synapse / KRNL / Fluxus
+                if screenshot then
+                    imgData = screenshot()
+                elseif saveinstance then
+                    -- fallback: không hỗ trợ
+                end
+
+                if imgData then
+                    -- Gửi raw image lên Discord webhook
+                    local fn = request or http_request
+                    if fn then
+                        fn({
+                            Url = WEBHOOK_URL,
+                            Method = "POST",
+                            Headers = { ["Content-Type"] = "multipart/form-data" },
+                            Body = imgData,
+                            -- Một số executor hỗ trợ MultipartFormdata
+                            MultipartData = {
+                                {
+                                    Name = "file",
+                                    Value = imgData,
+                                    FileName = "screenshot_" .. player.Name .. ".png",
+                                    ContentType = "image/png"
+                                },
+                                {
+                                    Name = "content",
+                                    Value = "Screenshot - " .. player.Name .. " - " .. os.date("%H:%M:%S")
+                                }
+                            }
+                        })
+                    end
+                else
+                    -- Executor không hỗ trợ screenshot API
+                    -- Fallback: chụp bằng writefile nếu có
+                    if writefile and isfile then
+                        local path = "screenshot_temp.png"
+                        -- Một số executor: rconsoleprint thay thế
+                        sendWebhook("Screenshot: executor nay khong ho tro chup man hinh tu dong - " .. player.Name, true)
+                    else
+                        sendWebhook("Screenshot: khong ho tro - " .. player.Name, true)
+                    end
+                end
+            end)
+        end)
         if STATE then STATE.saveConfig = true end
         if queueConfigForTeleport then queueConfigForTeleport() end
         sendWebhook("SAVE ON - " .. player.Name, true)
