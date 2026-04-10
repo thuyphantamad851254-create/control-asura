@@ -1,8 +1,6 @@
 {
-  "cmd": "start",
+  "cmd": "stop",
   "target": "manchanhkundz",
-  "timestamp": 1775810901,
-  "extra": {
-    "mode": "pullup"
-  }
+  "timestamp": 1775811276,
+  "extra": {}
 }
