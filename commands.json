@@ -1,6 +1,6 @@
 {
-  "cmd": "stop",
+  "cmd": "statscheck",
   "target": "manchanhkundz",
-  "timestamp": 1775810468,
+  "timestamp": 1775810505,
   "extra": {}
 }
