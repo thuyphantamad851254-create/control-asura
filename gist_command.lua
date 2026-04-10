@@ -35,13 +35,10 @@ local function handleCommand(cmd, target, extra)
         end
         -- Gọi đúng hàm stop như nút GUI
         pcall(function()
-            if stopTrainingByUser then
+            if getgenv().REMOTE_stopTraining then
+                getgenv().REMOTE_stopTraining()
+            elseif stopTrainingByUser then
                 stopTrainingByUser()
-            end
-        end)
-        pcall(function()
-            if STATE and STATE.saveConfig and getSavePayload then
-                getgenv().AUTO_FARM_RESTORE = getSavePayload()
             end
         end)
         log("STOP boi Remote Control")
@@ -49,13 +46,10 @@ local function handleCommand(cmd, target, extra)
 
     elseif cmd == "start" then
         local mode = (extra and extra.mode) or "Treadmill"
-        if CFG then CFG.Mode = mode end
-        if STATE then STATE.running = true; STATE.busy = true end
-        task.spawn(function()
-            if equipGear then equipGear() end
-            if setMacro then setMacro(true) end
-            if setupTreadmill then setupTreadmill() end
-            if STATE then STATE.busy = false end
+        pcall(function()
+            if getgenv().REMOTE_startFarm then
+                getgenv().REMOTE_startFarm(mode)
+            end
         end)
         log("Start [" .. mode .. "] boi Remote Control")
         sendWebhook("START [" .. mode .. "] - " .. player.Name, true)
