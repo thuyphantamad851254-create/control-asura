@@ -1,6 +1,6 @@
 {
-  "cmd": "statscheck",
+  "cmd": "hopserver",
   "target": "manchanhkundz",
-  "timestamp": 1775811321,
+  "timestamp": 1775811501,
   "extra": {}
 }
