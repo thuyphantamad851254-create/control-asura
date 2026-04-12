@@ -23,8 +23,8 @@ last_ts = 0
 
 def screenshot():
     try:
-        r = subprocess.run(["termux-screenshot", "-f", SCREEN_PATH], timeout=10, capture_output=True)
-        time.sleep(0.5)
+        r = subprocess.run(["screencap", "-p", SCREEN_PATH], timeout=10, capture_output=True)
+        time.sleep(0.3)
         return os.path.exists(SCREEN_PATH) and os.path.getsize(SCREEN_PATH) > 1000
     except Exception as e:
         print(f"Screenshot error: {e}")
